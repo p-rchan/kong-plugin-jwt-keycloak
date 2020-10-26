@@ -32,33 +32,31 @@ function table_to_string(tbl)
     for k, v in pairs(tbl) do
         -- Check the key type (ignore any numerical keys - assume its an array)
         if type(k) == "string" then
-            result = result.."[\""..k.."\"]".."="
+            result = result .. "[\"" .. k .. "\"]" .. "="
         end
 
         -- Check the value type
         if type(v) == "table" then
-            result = result..table_to_string(v)
+            result = result .. table_to_string(v)
         elseif type(v) == "boolean" then
-            result = result..tostring(v)
+            result = result .. tostring(v)
         else
-            result = result.."\""..v.."\""
+            result = result .. "\"" .. v .. "\""
         end
-        result = result..","
+        result = result .. ","
     end
     -- Remove leading commas from the result
     if result ~= "" then
-        result = result:sub(1, result:len()-1)
+        result = result:sub(1, result:len() - 1)
     end
     return result
 end
-
 
 local function retrieve_token_payload(internal_request_headers)
     if internal_request_headers == nil or table.getn(internal_request_headers) == 0 then
         return nil
     end
     kong.log.info('Calling retrieve_token_payload(). Getting token_payload which had been saved by other Kong plugins')
-
 
     local authenticated_consumer = ngx.ctx.authenticated_consumer
     if authenticated_consumer then
@@ -81,18 +79,33 @@ local function retrieve_token_payload(internal_request_headers)
     end
 
 
---     local userinfo_header = kong.request.get_header("X-Userinfo")
---     kong.log.debug('retrieve_token_payload() X-Userinfo header: ' .. userinfo_header)
---     kong.log.debug('retrieve_token_payload() X-Userinfo header decoded: ' .. ngx.decode_base64(userinfo_header))
+    --     local userinfo_header = kong.request.get_header("X-Userinfo")
+    --     kong.log.debug('retrieve_token_payload() X-Userinfo header: ' .. userinfo_header)
+    --     kong.log.debug('retrieve_token_payload() X-Userinfo header decoded: ' .. ngx.decode_base64(userinfo_header))
 
---     local tokenStr = kong.request.get_header("X-ID-Token")
---     local accessToken = kong.request.get_header("X-Access-Token")
+    --     local tokenStr = kong.request.get_header("X-ID-Token")
+    --     local accessToken = kong.request.get_header("X-Access-Token")
 
     for _, kong_header in pairs(internal_request_headers) do
         kong.log.debug('retrieve_token_payload() retrieving kong.request header: ' .. kong_header)
         local kong_header_value = kong.request.get_header(kong_header)
         if kong_header_value then
             kong.log.debug('retrieve_token_payload() header[' .. kong_header .. ']=' .. kong_header_value)
+
+            -- split access token into parts
+            if kong_header == 'X-Access-Token' then
+                -- First part is header
+                -- Second part is access token payload
+                -- Third part is signature
+                local accessTokenParts = {}
+                for match in string.gmatch(kong_header_value, "[^%.]+") do
+                    table.insert(accessTokenParts, match)
+                end
+                -- !!! Lua begins indexes from 1 !!!
+                kong_header_value = accessTokenParts[2];
+                kong.log.debug('retrieve_token_payload() retrieved access token payload: ' .. kong_header_value)
+
+            end
 
             local decoded_kong_header_value = ngx.decode_base64(kong_header_value)
             kong.log.debug('retrieve_token_payload() retrieved decoded value: ' .. decoded_kong_header_value)
@@ -124,7 +137,7 @@ local function retrieve_token(conf)
 
     local var = ngx.var
     for _, v in ipairs(conf.cookie_names) do
-        kong.log.debug('retrieve_token() checking cookie: '.. v)
+        kong.log.debug('retrieve_token() checking cookie: ' .. v)
         local cookie = var["cookie_" .. v]
         if cookie and cookie ~= "" then
             kong.log.debug('retrieve_token() cookie value: ' .. cookie)
@@ -241,7 +254,7 @@ end
 
 local function validate_signature(conf, jwt, second_call)
     kong.log.debug('Calling validate_signature()')
---     kong.log.debug('validate_signature() jwt: ' .. table_to_string(jwt))
+    --     kong.log.debug('validate_signature() jwt: ' .. table_to_string(jwt))
     local issuer_cache_key = 'issuer_keys_' .. jwt.claims.iss
     local well_known_endpoint = keycloak_keys.get_wellknown_endpoint(conf.well_known_template, jwt.claims.iss)
     -- Retrieve public keys
@@ -270,7 +283,7 @@ local function validate_signature(conf, jwt, second_call)
         return validate_signature(conf, jwt, true)
     end
 
-    kong.log.err('Invalid token signature: ' )
+    kong.log.err('Invalid token signature: ')
     return kong.response.exit(401, { message = "Invalid token signature" })
 end
 
@@ -313,7 +326,7 @@ local function do_authentication(conf)
     end
 
     if token then
-       kong.log.debug('do_authentication() retrieved token: ' .. token)
+        kong.log.debug('do_authentication() retrieved token: ' .. token)
     end
 
     local jwt_claims
@@ -328,11 +341,11 @@ local function do_authentication(conf)
                 return false, { status = 401, message = "Unauthorized" }
             end
             kong.log.debug('do_authentication() token_payload retrieved successfully')
-       elseif token_type == "table" then
+        elseif token_type == "table" then
             return false, { status = 401, message = "Multiple tokens provided" }
-       else
+        else
             return false, { status = 401, message = "Unrecognizable token" }
-       end
+        end
     end
 
 
@@ -354,7 +367,7 @@ local function do_authentication(conf)
         jwt_claims = jwt.claims
 
         if jwt.header.alg ~= (conf.algorithm or "HS256") then
-            return false, {status = 403, message = "Invalid algorithm"}
+            return false, { status = 403, message = "Invalid algorithm" }
         end
 
         err = validate_signature(conf, jwt)
@@ -424,7 +437,6 @@ local function do_authentication(conf)
     return false, { status = 403, message = "Access token does not have the required scope/role: " .. err }
 end
 
-
 function JwtKeycloakHandler:access(conf)
     JwtKeycloakHandler.super.access(self)
 
@@ -446,9 +458,9 @@ function JwtKeycloakHandler:access(conf)
         if conf.anonymous then
             -- get anonymous user
             local consumer_cache_key = kong.db.consumers:cache_key(conf.anonymous)
-            local consumer, err      = kong.cache:get(consumer_cache_key, nil,
-                                                    load_consumer,
-                                                    conf.anonymous, true)
+            local consumer, err = kong.cache:get(consumer_cache_key, nil,
+                    load_consumer,
+                    conf.anonymous, true)
             if err then
                 kong.log.err(err)
                 return kong.response.exit(500, { message = "An unexpected error occurred" })
@@ -464,7 +476,7 @@ function JwtKeycloakHandler:access(conf)
                 local port = kong.request.get_port()
                 local url = scheme .. "://" .. host .. ":" .. port .. conf.redirect_after_authentication_failed_uri
 
-                kong.response.set_header("Location",url)
+                kong.response.set_header("Location", url)
                 kong.log.debug('do_authentication() exit: ' .. url)
                 return ngx.redirect(url)
             end
