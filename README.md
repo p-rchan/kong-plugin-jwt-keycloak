@@ -65,6 +65,8 @@ If you have any suggestion or comments, please feel free to open an issue on thi
 | 1.2.x        | :white_check_mark: |
 | 1.3.x        | :white_check_mark: |
 | 1.4.x        | :white_check_mark: |
+| 1.5.x        | :white_check_mark: |
+| 2.0.x        | :white_check_mark: |
 
 | Keycloak Version |   Tests passing    |
 | ---------------- | :----------------: |
@@ -73,6 +75,9 @@ If you have any suggestion or comments, please feel free to open an issue on thi
 | 5.X.X            | :white_check_mark: |
 | 6.X.X            | :white_check_mark: |
 | 7.X.X            | :white_check_mark: |
+| 8.X.X            | :white_check_mark: |
+| 9.X.X            | :white_check_mark: |
+| 10.X.X           | :white_check_mark: |
 
 ## Installation
 
