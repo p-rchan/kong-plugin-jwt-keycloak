@@ -169,6 +169,7 @@ function JwtKeycloakHandler:new()
 end
 
 local function load_consumer(consumer_id, anonymous)
+    kong.log.debug('loading consumer');
     local result, err = kong.db.consumers:select { id = consumer_id }
     if not result then
         if anonymous and not err then
@@ -176,7 +177,8 @@ local function load_consumer(consumer_id, anonymous)
         end
         return nil, err
     end
-    kong.log.debug('load_consumer(): ' .. result)
+    kong.log.debug('load_consumer:(): ' .. result.id)
+    -- kong.log.debug('load_consumer(): ' .. result)
     return result
 end
 
@@ -190,7 +192,8 @@ local function load_consumer_by_custom_id(custom_id)
 end
 
 local function set_consumer(consumer, credential, token)
-    kong.log.debug('Calling set_consumer()' .. credential)
+    -- kong.log.debug('Calling set_consumer()' .. credential)
+    kong.log.debug('Calling set_consumer()' )
 
     local set_header = kong.service.request.set_header
     local clear_header = kong.service.request.clear_header
@@ -291,6 +294,9 @@ local function match_consumer(conf, jwt)
     kong.log.debug('Calling match_consumer()')
     local consumer, err
     local consumer_id = jwt.claims[conf.consumer_match_claim]
+    local consumer_cache_key
+    kong.log.debug('claim to match is'..conf.consumer_match_claim);
+    kong.log.debug('consumer to match:'..consumer_id);
 
     if conf.consumer_match_claim_custom_id then
         consumer_cache_key = "custom_id_key_" .. consumer_id
@@ -308,7 +314,7 @@ local function match_consumer(conf, jwt)
         return false, { status = 401, message = "Unable to find consumer for token" }
     end
 
-    kong.log.debug('match_consumer() consumer=' .. consumer)
+    kong.log.debug('match_consumer() consumer=' .. consumer.id)
     if consumer then
         set_consumer(consumer, nil, nil)
     end
@@ -401,7 +407,7 @@ local function do_authentication(conf)
         return false, { status = 401, message = "Token issuer not allowed" }
     end
 
-
+    local ok
     -- Match consumer
     if conf.consumer_match and jwt then
         kong.log.debug('do_authentication() Match consumer...')
@@ -440,6 +446,7 @@ end
 function JwtKeycloakHandler:access(conf)
     JwtKeycloakHandler.super.access(self)
 
+    kong.log.debug('Executing JwtKeycloakHandler.access()');
     kong.log.debug('Calling access()')
     -- check if preflight request and whether it should be authenticated
     if not conf.run_on_preflight and kong.request.get_method() == "OPTIONS" then
