@@ -52,6 +52,23 @@ function table_to_string(tbl)
     return result
 end
 
+local function isempty(s)
+    return s== nuil or s == ''
+end
+
+function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            s = s .. '['..k..'] = ' .. dump(v) .. ','
+         end
+         return s .. '} '
+    else
+         return tostring(o)
+    end
+end
+
 local function retrieve_token_payload(internal_request_headers)
     if internal_request_headers == nil or table.getn(internal_request_headers) == 0 then
         return nil
@@ -59,23 +76,24 @@ local function retrieve_token_payload(internal_request_headers)
     kong.log.info('Calling retrieve_token_payload(). Getting token_payload which had been saved by other Kong plugins')
 
     local authenticated_consumer = ngx.ctx.authenticated_consumer
-    if authenticated_consumer then
-        kong.log.debug('retrieve_token_payload() authenticated_consumer: ' .. authenticated_consumer)
+    if not(isempty( authenticated_consumer))  then
+        kong.log.debug(authenticated_consumer)
+        kong.log.debug('retrieve_token_payload() authenticated_consumer: ' .. dump(authenticated_consumer))
     end
 
     local jwt_keycloak_token = kong.ctx.shared.jwt_keycloak_token
-    if jwt_keycloak_token then
-        kong.log.debug('retrieve_token_payload() jwt_keycloak_token: ' .. jwt_keycloak_token)
+    if not(isempty(jwt_keycloak_token)) then
+        kong.log.debug('retrieve_token_payload() jwt_keycloak_token: ' .. dump(jwt_keycloak_token))
     end
 
     local shared_authenticated_jwt_token = kong.ctx.shared.authenticated_jwt_token
-    if shared_authenticated_jwt_token then
-        kong.log.debug('retrieve_token_payload() shared_authenticated_jwt_token: ' .. shared_authenticated_jwt_token)
+    if not(isempty(shared_authenticated_jwt_token)) then
+        kong.log.debug('retrieve_token_payload() shared_authenticated_jwt_token: ' .. dump(shared_authenticated_jwt_token))
     end
 
     local authenticated_jwt_token = ngx.ctx.authenticated_jwt_token
-    if authenticated_jwt_token then
-        kong.log.debug('retrieve_token_payload() authenticated_jwt_token: ' .. authenticated_jwt_token)
+    if not(isempty(authenticated_jwt_token)) then
+        kong.log.debug('retrieve_token_payload() authenticated_jwt_token: ' .. dump(authenticated_jwt_token))
     end
 
 
@@ -453,10 +471,19 @@ function JwtKeycloakHandler:access(conf)
         return
     end
 
-    if conf.anonymous and kong.client.get_credential() then
+    local creds = kong.client.get_credential()
+
+    if conf.anonymous and creds then
         -- we're already authenticated, and we're configured for using anonymous,
         -- hence we're in a logical OR between auth methods and we're already done.
-        return
+        kong.log.debug('RC: We allow anonymous')
+        kong.log.debug('RC: credential is ' ..  dump(kong.client.get_credential()))
+        local key_type = creds["typ"]
+        kong.log.debug('RC: credential type is '.. dump(key_type))
+        if isempty(key_type) then
+            kong.log.debug('Short circuiting for apikey')
+            return
+        end
     end
 
     local ok, err = do_authentication(conf)
