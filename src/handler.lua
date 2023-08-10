@@ -360,7 +360,9 @@ local function do_authentication(conf)
     if token_type ~= "string" then
         if token_type == "nil" then
             -- Retrieve token payload
+            kong.log.debug('No Token in cache - retrieving token and jwt_claims')
             jwt_claims = retrieve_token_payload(conf.internal_request_headers)
+            kong.log.debug('Token payload retrieved: ' .. dump(jwt_claims))
             if not jwt_claims then
                 return false, { status = 401, message = "Unauthorized" }
             end
@@ -371,6 +373,7 @@ local function do_authentication(conf)
             return false, { status = 401, message = "Unrecognizable token" }
         end
     end
+    kong.log.debug('Decoding token...')
 
 
 
@@ -379,10 +382,12 @@ local function do_authentication(conf)
     if token then
         jwt, err = jwt_decoder:new(token)
         if err then
+            kong.log.warn('Error: Token decoding failed')
             return false, { status = 401, message = "Bad token; " .. tostring(err) }
         end
     end
 
+    kong.log.debug('Decoding token OK... Verifying Token')
 
 
     -- Verify algorithim
@@ -391,11 +396,13 @@ local function do_authentication(conf)
         jwt_claims = jwt.claims
 
         if jwt.header.alg ~= (conf.algorithm or "HS256") then
+            kong.log.warn('Error: Token invalid algorithm')
             return false, { status = 403, message = "Invalid algorithm" }
         end
 
         err = validate_signature(conf, jwt)
         if err ~= nil then
+            kong.log.warn('Error: Token invalid signature')
             return false, err
         end
 
@@ -403,6 +410,7 @@ local function do_authentication(conf)
         kong.log.debug('do_authentication() Verify the JWT registered claims...')
         local ok_claims, errors = jwt:verify_registered_claims(conf.claims_to_verify)
         if not ok_claims then
+            kong.log.warn('Error: Token claims invalid')
             return false, { status = 401, message = "Token claims invalid: " .. table_to_string(errors) }
         end
 
@@ -411,19 +419,21 @@ local function do_authentication(conf)
         if conf.maximum_expiration ~= nil and conf.maximum_expiration > 0 then
             local ok, errors = jwt:check_maximum_expiration(conf.maximum_expiration)
             if not ok then
+                kong.log.warn('Error: Token claim expired')
                 return false, { status = 403, message = "Token claims invalid: " .. table_to_string(errors) }
             end
         end
-
     end
-
-
+    
+    kong.log.debug('Token ok - verifying issuer')
 
     -- Verify that the issuer is allowed
-    kong.log.debug('do_authentication() Verify that the issuer is allowed...')
     if not validate_issuer(conf.allowed_iss, jwt_claims) then
+        kong.log.warn('Error: Token issuer invalid')
         return false, { status = 401, message = "Token issuer not allowed" }
     end
+
+    kong.log.debug('Token issuer verified.. matching consumer')
 
     local ok
     -- Match consumer
@@ -431,32 +441,45 @@ local function do_authentication(conf)
         kong.log.debug('do_authentication() Match consumer...')
         ok, err = match_consumer(conf, jwt)
         if not ok then
+            kong.log.warn('Error: Token no match for consumer')
             return ok, err
         end
     end
 
+    kong.log.debug('Token consumer matched... verifying scope')
     -- Verify roles or scopes
-    kong.log.debug('do_authentication() Verify roles or scopes...')
     local ok, err = validate_scope(conf.scope, jwt_claims)
 
     if ok then
+        kong.log.debug('Scope is OK, validating realm_roles')
         ok, err = validate_realm_roles(conf.realm_roles, jwt_claims)
+    else
+        kong.log.warn('Error: Scope is invalid')
     end
 
     if ok then
+        kong.log.debug('Realm roles ok, validating roles')
         ok, err = validate_roles(conf.roles, jwt_claims)
+    else
+        kong.log.warn('Error: Realm roles invalid')
     end
 
     if ok then
+        kong.log.debug('Roles OK, validating client_roles')
         ok, err = validate_client_roles(conf.client_roles, jwt_claims)
+    else
+        kong.log.warn('Error: Roles invalid')
     end
 
     if ok then
+        kong.log.debug('Tests all passed...')
         if jwt then
             kong.ctx.shared.jwt_keycloak_token = jwt
         end
+        kong.log.debug('do_authentication() complete - allowing...')
         return true
     end
+    kong.log.debug('Erroring...')
 
     return false, { status = 403, message = "Access token does not have the required scope/role: " .. err }
 end
@@ -517,6 +540,8 @@ function JwtKeycloakHandler:access(conf)
 
             return kong.response.exit(err.status, err.errors or { message = err.message })
         end
+    else
+        kong.log.debug('do_authentication() returned ok')
     end
 end
 
