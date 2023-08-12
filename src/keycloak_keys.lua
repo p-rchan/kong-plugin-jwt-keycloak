@@ -30,7 +30,7 @@ local function table_to_string(tbl)
 end
 
 local function isempty(s)
-    return s== nuil or s == ''
+    return s== nil or s == ''
 end
 
 local function dump(o)
@@ -86,17 +86,21 @@ local function get_issuer_keys(conf,well_known_endpoint)
     -- Get port of the request: This is done because keycloak 3.X.X does not play well with lua socket.http
     local req = url.parse(well_known_endpoint)
     kong.log.debug('get_issuer_keys starting.. well_known_endpoint is:'..well_known_endpoint)
-    kong.log.debug('key_url_override is : '.. conf.keyurl_local_override);
   
+    local final_scheme = req.scheme
     local final_well_known_endpoint = well_known_endpoint
     local final_jwks_uri
 
-    if conf.keyurl_local_override then
+    if not(isempty(conf.keyurl_local_override)) then
+        kong.log.debug('key_url_override is : '.. conf.keyurl_local_override);
         final_well_known_endpoint = conf.keyurl_local_override .. '.well-known/openid-configuration'
+        local protocol_index = string.find(final_well_known_endpoint,":")
+        final_scheme = string.sub(final_well_known_endpoint,0,protocol_index)
+        kong.log.debug("final scheme is :"..final_scheme)
     end
 
     kong.log.debug('using wellknownurl: ' .. final_well_known_endpoint)
-    local res, err = get_request(well_known_endpoint, req.scheme, req.port)
+    local res, err = get_request(final_well_known_endpoint, final_scheme, req.port)
     if err then
         return nil, err
     end
@@ -104,12 +108,12 @@ local function get_issuer_keys(conf,well_known_endpoint)
 
     final_jwks_uri = res['jwks_uri']
 
-    if conf.keyurl_local_override then
+    if not(isempty(conf.keyurl_local_override)) then
         final_jwks_uri = conf.keyurl_local_override .. '/protocol/openid-connect/certs'
     end
     kong.log.debug('jwks_uri:'..final_jwks_uri)
 
-    local res, err = get_request(final_jwks_uri, req.scheme,  req.port)
+    local res, err = get_request(final_jwks_uri, final_scheme,  req.port)
     if err then
         return nil, err
     end

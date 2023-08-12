@@ -53,7 +53,7 @@ local function table_to_string(tbl)
 end
 
 local function isempty(s)
-    return s== nuil or s == ''
+    return s== nil or s == ''
 end
 
 local function dump(o)
