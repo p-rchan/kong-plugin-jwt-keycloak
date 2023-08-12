@@ -27,7 +27,7 @@ kong.log.debug('JWT_KEYCLOAK_PRIORITY: ' .. priority)
 JwtKeycloakHandler.PRIORITY = priority
 JwtKeycloakHandler.VERSION = "1.1.0"
 
-function table_to_string(tbl)
+local function table_to_string(tbl)
     local result = ""
     for k, v in pairs(tbl) do
         -- Check the key type (ignore any numerical keys - assume its an array)
@@ -56,7 +56,7 @@ local function isempty(s)
     return s== nuil or s == ''
 end
 
-function dump(o)
+local function dump(o)
     if type(o) == 'table' then
         local s = '{ '
         for k,v in pairs(o) do
@@ -254,9 +254,10 @@ local function set_consumer(consumer, credential, token)
     end
 end
 
-local function get_keys(well_known_endpoint)
+local function get_keys(conf,well_known_endpoint)
     kong.log.debug('Getting public keys from keycloak...')
-    local keys, err = keycloak_keys.get_issuer_keys(well_known_endpoint)
+
+    local keys, err = keycloak_keys.get_issuer_keys(conf,well_known_endpoint)
     if err then
         return nil, err
     end
@@ -277,9 +278,10 @@ local function validate_signature(conf, jwt, second_call)
     kong.log.debug('Calling validate_signature()')
     --     kong.log.debug('validate_signature() jwt: ' .. table_to_string(jwt))
     local issuer_cache_key = 'issuer_keys_' .. jwt.claims.iss
+
     local well_known_endpoint = keycloak_keys.get_wellknown_endpoint(conf.well_known_template, jwt.claims.iss)
     -- Retrieve public keys
-    local public_keys, err = kong.cache:get(issuer_cache_key, nil, get_keys, well_known_endpoint, true)
+    local public_keys, err = kong.cache:get(issuer_cache_key, nil, get_keys, conf, well_known_endpoint, true)
 
     if not public_keys then
         if err then
@@ -489,6 +491,7 @@ function JwtKeycloakHandler:access(conf)
 
     kong.log.debug('Executing JwtKeycloakHandler.access()');
     kong.log.debug('Calling access()')
+    kong.log.info('keyurl_local_override:' .. dump(conf.keyurl_local_override))
     -- check if preflight request and whether it should be authenticated
     if not conf.run_on_preflight and kong.request.get_method() == "OPTIONS" then
         return

@@ -31,7 +31,8 @@ return {
 
 
           { internal_request_headers = { type = "set", elements = { type = "string" }, default = nil }, },
-          { redirect_after_authentication_failed_uri = { type = "string", required = false, default = nil }, }
+          { redirect_after_authentication_failed_uri = { type = "string", required = false, default = nil }, },
+          { keyurl_local_override = { type = "string" , default = nil },}
 
         },
       },
